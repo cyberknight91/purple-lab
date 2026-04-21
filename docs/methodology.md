@@ -1,135 +1,135 @@
-# Purple-Lab Methodology
+# Metodología Purple-Lab
 
-> *Detection without simulation is theatre. Simulation without detection is showing off.*
+> *Detección sin simulación es teatro. Simulación sin detección es postureo.*
 
-This document describes the workflow I use for every atomic in this repo. It is the same workflow I use in paid engagements — condensed, but not cut.
+Este documento describe el workflow que uso para cada atomic del repo. Es el mismo workflow que uso en engagements pagados — condensado, pero no recortado.
 
 ---
 
-## The loop
+## El loop
 
 ```
 ┌────────────┐   ┌────────────┐   ┌──────────────┐   ┌────────────┐   ┌────────────┐
-│ 1. Select  │──▶│ 2. Simulate│──▶│ 3. Observe   │──▶│ 4. Detect  │──▶│ 5. Baseline│
-│  technique │   │            │   │  telemetry   │   │            │   │            │
+│ 1. Elegir  │──▶│ 2. Simular │──▶│ 3. Observar  │──▶│ 4. Detectar│──▶│ 5. Baseline│
+│  técnica   │   │            │   │  telemetría  │   │            │   │            │
 └────────────┘   └────────────┘   └──────────────┘   └────────────┘   └────────────┘
       ▲                                                                      │
       └──────────────────────────────────────────────────────────────────────┘
-                               (iterate, tune, publish)
+                               (iterar, tunear, publicar)
 ```
 
 ---
 
-## 1. Select the technique
+## 1. Elegir la técnica
 
-Pick from **real intrusion reports**, not from a list of cool hacks.
+Tira de **informes de intrusiones reales**, no de una lista de hacks molones.
 
-Primary sources:
-- [The DFIR Report](https://thedfirreport.com/) — detailed intrusion walk-throughs
-- [CISA advisories](https://www.cisa.gov/news-events/cybersecurity-advisories) — state-aligned adversary TTPs
+Fuentes primarias:
+- [The DFIR Report](https://thedfirreport.com/) — walk-throughs detallados de intrusiones
+- [CISA advisories](https://www.cisa.gov/news-events/cybersecurity-advisories) — TTPs de adversarios state-aligned
 - [Red Canary Threat Detection Report](https://redcanary.com/threat-detection-report/)
 - [Mandiant M-Trends](https://www.mandiant.com/m-trends)
 
-For each technique I'm considering, I capture:
+Para cada técnica candidata capturo:
 
-| Field | Example |
+| Campo | Ejemplo |
 |-------|---------|
 | ATT&CK ID | T1059.001 |
-| Last seen (report) | DFIR Report, March 2025 |
-| Adversary | Pikabot, BlackBasta affiliate |
-| Platform | Windows 10/11, Server 2019+ |
-| Pre-req | Initial execution, any shell |
-| OPSEC level | Low (raw) to High (defender-evading) |
+| Last seen (informe) | DFIR Report, marzo 2025 |
+| Adversario | Pikabot, afiliado BlackBasta |
+| Plataforma | Windows 10/11, Server 2019+ |
+| Pre-requisito | Execution inicial, cualquier shell |
+| Nivel OPSEC | Bajo (raw) a Alto (evader) |
 
-I prefer **raw / low-OPSEC** variants for the atomic. The point is to produce the telemetry the technique *fundamentally* generates, not to emulate a specific evader.
-
----
-
-## 2. Simulate
-
-The atomic script (`execute.ps1` / `execute.sh`) has three invariants:
-
-1. **Benign payload.** Whatever the technique *does* must be harmless (write to stdout, spawn notepad, create a self-removing task). The invocation *pattern* must be identical to hostile.
-2. **Idempotent.** Running the atomic twice leaves the system in the same state as running it once.
-3. **Self-documenting.** First lines print technique ID, timestamp, what's about to happen. The last lines print what to look for in the SIEM.
-
-I avoid:
-- Third-party tooling (Mimikatz, Rubeus, SharpHound binaries) in the atomic itself. Those go in a separate `/tools` directory with clear warnings. The atomic should not require network downloads at run-time.
-- Obfuscation tricks. The atomic is a control sample, not an evasion test.
+Prefiero variantes **raw / low-OPSEC** para el atomic. El objetivo es producir la telemetría que la técnica genera *fundamentalmente*, no emular un evader específico.
 
 ---
 
-## 3. Observe telemetry
+## 2. Simular
 
-After firing, I record **every** event the SIEM receives that is causally linked to the atomic. This includes irrelevant noise — it's critical for FP analysis later.
+El script del atomic (`execute.ps1` / `execute.sh`) tiene tres invariantes:
 
-Minimum telemetry stack:
-- **Sysmon** with [SwiftOnSecurity config](https://github.com/SwiftOnSecurity/sysmon-config) or [sysmon-modular](https://github.com/olafhartong/sysmon-modular). The latter gives richer events 10/22/23 coverage.
-- **Security** log with Advanced Audit Policy set per [Malware Archaeology cheat-sheets](https://www.malwarearchaeology.com/cheat-sheets).
-- **PowerShell** 4103 + 4104 + 400 enabled via GPO.
-- **TaskScheduler/Operational** enabled.
-- **WMI-Activity/Operational** enabled.
+1. **Payload benigno.** Lo que la técnica *hace* tiene que ser inocuo (escribir a stdout, abrir notepad, crear una tarea auto-eliminable). El *patrón* de invocación tiene que ser idéntico al hostil.
+2. **Idempotente.** Ejecutar el atomic dos veces deja el sistema en el mismo estado que ejecutarlo una.
+3. **Auto-documentado.** Las primeras líneas imprimen el ID de la técnica, timestamp y qué va a pasar. Las últimas imprimen qué buscar en el SIEM.
 
-Every event I care about goes into `expected_events.md` with real field values from my lab run.
-
----
-
-## 4. Detect
-
-The Sigma rule has to pass three tests:
-
-1. **Technique-level, not tool-level.** Detect the behaviour (e.g., `rundll32 + comsvcs + MiniDump`) not the binary name (`mimikatz.exe`). The latter breaks the moment the attacker renames.
-2. **Field-economical.** The smallest set of fields that uniquely identifies the technique. Extra conditions mean more places for an attacker to slip.
-3. **Backend-portable.** Converts cleanly with `sigma-cli` to at least Elastic EQL, Wazuh `<rule>`, Splunk SPL.
-
-I keep the Sigma YAML as the canonical form. Compiled outputs for the target backends live under `detections/elastic/`, `detections/wazuh/`, etc.
+Evito:
+- Herramientas de terceros (Mimikatz, Rubeus, binarios de SharpHound) en el atomic mismo. Eso va en un directorio `/tools` separado con avisos claros. El atomic no debería requerir descargas de red en tiempo de ejecución.
+- Trucos de ofuscación. El atomic es una muestra de control, no un test de evasión.
 
 ---
 
-## 5. Baseline and tune
+## 3. Observar telemetría
 
-Before a rule reaches `stable`, I run it against **24 hours of benign workstation activity** and measure:
+Tras disparar, registro **todos** los eventos que el SIEM recibe causalmente ligados al atomic. Eso incluye ruido irrelevante — es crítico para el análisis de FP después.
 
-- False positives per day
-- Top 5 sources of FP (parent process, user, host role)
-- Proposed exclusions
+Stack mínimo de telemetría:
+- **Sysmon** con [config de SwiftOnSecurity](https://github.com/SwiftOnSecurity/sysmon-config) o [sysmon-modular](https://github.com/olafhartong/sysmon-modular). El segundo da eventos 10/22/23 con cobertura más rica.
+- Log de **Security** con Advanced Audit Policy según los [cheat-sheets de Malware Archaeology](https://www.malwarearchaeology.com/cheat-sheets).
+- **PowerShell** 4103 + 4104 + 400 habilitados vía GPO.
+- **TaskScheduler/Operational** habilitado.
+- **WMI-Activity/Operational** habilitado.
 
-If FP/day > 1 on a workstation profile, the rule stays `experimental` until tuned. Documented FPs are **always** listed in the rule's `falsepositives:` block — never hidden.
+Todo evento que me importa va a `expected_events.md` con valores de campo reales de mi lab run.
 
-For each rule I also attach a **hunt query** — the broader, noisier version meant for human investigation rather than alert. It lives in `detections/<id>_analysis.md`.
+---
+
+## 4. Detectar
+
+La regla Sigma tiene que pasar tres tests:
+
+1. **Nivel técnica, no nivel herramienta.** Detecta el comportamiento (ej. `rundll32 + comsvcs + MiniDump`) no el nombre del binario (`mimikatz.exe`). Lo segundo se rompe en cuanto el atacante renombra.
+2. **Económica en campos.** El conjunto mínimo de campos que identifica unívocamente la técnica. Condiciones extra significan más sitios por donde el atacante se escurre.
+3. **Portable entre backends.** Convierte limpiamente con `sigma-cli` a al menos Elastic EQL, Wazuh `<rule>`, Splunk SPL.
+
+Mantengo el YAML Sigma como forma canónica. Salidas compiladas para los backends target viven bajo `detections/elastic/`, `detections/wazuh/`, etc.
+
+---
+
+## 5. Baseline y tuning
+
+Antes de que una regla llegue a `stable`, la ejecuto contra **24 horas de actividad benigna de workstation** y mido:
+
+- Falsos positivos por día
+- Top 5 fuentes de FP (proceso padre, usuario, rol del host)
+- Exclusiones propuestas
+
+Si FP/día > 1 en un perfil workstation, la regla se queda `experimental` hasta tunearse. Los FPs documentados **siempre** aparecen en el bloque `falsepositives:` de la regla — nunca escondidos.
+
+Para cada regla también adjunto una **hunt query** — la versión más amplia y ruidosa pensada para investigación humana en lugar de alerta. Vive en `detections/<id>_analysis.md`.
 
 ---
 
 ## Reporting
 
-Every atomic-rule pair produces two artefacts a consultant should be able to hand a client:
+Cada pareja atomic-regla produce dos artefactos que un consultor debería poder entregar a un cliente:
 
-- **Technical note** — the files in `atomics/<id>/` and `detections/sigma/<id>.yml`.
-- **Executive paragraph** — one paragraph, no jargon, answering: *what is this, why should you care, what's our current coverage*.
+- **Nota técnica** — los archivos en `atomics/<id>/` y `detections/sigma/<id>.yml`.
+- **Párrafo ejecutivo** — un párrafo, sin jerga, respondiendo: *qué es esto, por qué debería importarte, cuál es nuestra cobertura actual*.
 
-I include the executive paragraph at the top of each atomic's README under a dedicated heading when a full client-facing report is needed.
+Incluyo el párrafo ejecutivo al principio del README de cada atomic bajo un heading dedicado cuando hace falta un informe completo cara al cliente.
 
 ---
 
 ## Tooling
 
-- **sigma-cli** — Sigma rule validation & backend conversion.
-- **sigma-test** — unit-style tests for rules against known good/bad events.
-- **Elastic Detection Rules repo** — reference detection library.
-- **ATT&CK Navigator** — coverage visualisation.
-- **sysmon-config.xml** validator — https://github.com/mkorman90/sysmon-config-validator
+- **sigma-cli** — validación de reglas Sigma y conversión a backends.
+- **sigma-test** — tests tipo unit para reglas contra eventos good/bad conocidos.
+- **Repo Elastic Detection Rules** — librería de detección de referencia.
+- **ATT&CK Navigator** — visualización de cobertura.
+- Validador de **sysmon-config.xml** — https://github.com/mkorman90/sysmon-config-validator
 
 ---
 
-## Definition of "shipped"
+## Definición de "shipped"
 
-An atomic is **shipped** when the repo contains, at minimum:
+Un atomic está **shipped** cuando el repo contiene, como mínimo:
 
-- [ ] `atomics/<id>_<slug>/README.md` — kill-chain, refs, executive paragraph
-- [ ] `atomics/<id>_<slug>/execute.{ps1,sh}` — simulation script
-- [ ] `atomics/<id>_<slug>/expected_events.md` — telemetry reference
-- [ ] `detections/sigma/<id>.yml` — Sigma rule, status ≥ `experimental`
-- [ ] Rule validates under CI (`sigma-cli check`)
-- [ ] FP note filled in or explicitly "none observed in 24h baseline"
+- [ ] `atomics/<id>_<slug>/README.md` — kill-chain, refs, párrafo ejecutivo
+- [ ] `atomics/<id>_<slug>/execute.{ps1,sh}` — script de simulación
+- [ ] `atomics/<id>_<slug>/expected_events.md` — referencia de telemetría
+- [ ] `detections/sigma/<id>.yml` — regla Sigma, status ≥ `experimental`
+- [ ] La regla valida bajo CI (`sigma-cli check`)
+- [ ] Nota FP rellenada o explícitamente "none observed in 24h baseline"
 
-Partial atomics live on branches, never in `main`.
+Los atomics parciales viven en ramas, nunca en `main`.

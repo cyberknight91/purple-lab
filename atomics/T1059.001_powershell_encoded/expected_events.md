@@ -1,6 +1,6 @@
-# Expected events — T1059.001
+# Eventos esperados — T1059.001
 
-After running `execute.ps1` you should see, in order of appearance:
+Tras ejecutar `execute.ps1` deberías ver, en orden de aparición:
 
 ## 1. Sysmon `EventID 1` — Process Creation
 
@@ -20,13 +20,13 @@ After running `execute.ps1` you should see, in order of appearance:
 </Event>
 ```
 
-Key fields for the detection:
-- `Image` ends in `\powershell.exe`
-- `CommandLine` contains `-EncodedCommand` / `-enc` / `-ec`
+Campos clave para la detección:
+- `Image` termina en `\powershell.exe`
+- `CommandLine` contiene `-EncodedCommand` / `-enc` / `-ec`
 
-## 2. Security `EventID 4688` — Process Creation (if enabled)
+## 2. Security `EventID 4688` — Process Creation (si está activado)
 
-Same semantics as Sysmon 1. Requires:
+Misma semántica que Sysmon 1. Requiere:
 - `Audit Process Creation` — Success (Advanced Audit Policy)
 - `Include command line in process creation events` — Enabled
 
@@ -37,17 +37,17 @@ ScriptBlockText: Write-Host "atomic-test: T1059.001 fired at 2026-04-20T12:34:56
 Path:          :
 ```
 
-Requires:
-- Group Policy → Computer Config → Admin Templates → Windows Components → Windows PowerShell
+Requiere:
+- Directiva de grupo → Configuración del equipo → Plantillas admin → Componentes de Windows → Windows PowerShell
   - `Turn on PowerShell Script Block Logging` — Enabled
 
-> The decoded script text appears **here** even though the invocation was encoded. This is why 4104 is one of the most valuable PowerShell telemetry sources.
+> El script decodificado aparece **aquí** aunque la invocación fuera encodeada. Por eso 4104 es una de las fuentes de telemetría PowerShell más valiosas.
 
-## 4. PowerShell `EventID 4103` — Module Logging (optional)
+## 4. PowerShell `EventID 4103` — Module Logging (opcional)
 
-If module logging is enabled for `Microsoft.PowerShell.*`, the `Write-Host` invocation is logged with its parameters.
+Si module logging está habilitado para `Microsoft.PowerShell.*`, la invocación de `Write-Host` se registra con sus parámetros.
 
-## Verification queries
+## Queries de verificación
 
 **Wazuh / OSSEC**
 ```

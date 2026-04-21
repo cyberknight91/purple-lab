@@ -1,8 +1,8 @@
-# Expected events — T1053.005
+# Eventos esperados — T1053.005
 
-## 1. Security `EventID 4698` — Scheduled task created
+## 1. Security `EventID 4698` — Tarea programada creada
 
-Most important single event for this technique. The XML payload contains the full task definition.
+El evento más importante para esta técnica. El payload XML contiene la definición completa de la tarea.
 
 ```xml
 <Event>
@@ -25,7 +25,7 @@ Most important single event for this technique. The XML payload contains the ful
 </Event>
 ```
 
-Requires:
+Requiere:
 - `Audit Other Object Access Events` — Success (Advanced Audit Policy)
 
 ## 2. Sysmon `EventID 1` — Process Creation
@@ -36,7 +36,7 @@ CommandLine: schtasks.exe /create /tn PurpleLab-AtomicTest /tr notepad.exe /sc O
 ParentImage: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
 ```
 
-The parent is often the tell — `schtasks.exe` spawned by `cmd.exe`, `powershell.exe` or (worse) office binaries is more suspicious than the Task Scheduler service itself.
+El padre suele ser la pista — `schtasks.exe` lanzado por `cmd.exe`, `powershell.exe` o (peor) binarios de Office es más sospechoso que el propio servicio Task Scheduler.
 
 ## 3. TaskScheduler `EventID 106` — Microsoft-Windows-TaskScheduler/Operational
 
@@ -46,9 +46,9 @@ User "LAB\mario" registered Task Scheduler task "\PurpleLab-AtomicTest"
 
 ## 4. File creation — `C:\Windows\System32\Tasks\PurpleLab-AtomicTest`
 
-XML file created. Sysmon `EventID 11` (FileCreate) if monitored.
+Se crea archivo XML. Sysmon `EventID 11` (FileCreate) si está monitorizado.
 
-## Verification queries
+## Queries de verificación
 
 **Wazuh / OSSEC**
 ```

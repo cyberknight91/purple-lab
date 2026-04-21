@@ -1,73 +1,73 @@
 # T1053.005 — Scheduled Task / Job
 
-| Field | Value |
+| Campo | Valor |
 |-------|-------|
-| **Tactic** | Persistence · Privilege Escalation · Execution |
-| **Technique** | [T1053.005](https://attack.mitre.org/techniques/T1053/005/) |
-| **Platform** | Windows |
-| **Permissions** | User (for user scope) / Admin (for `SYSTEM` scope) |
-| **Data sources** | `Scheduled Job: Scheduled Job Creation`, `Process Creation`, `File: File Creation` |
-| **Detection** | [`sigma/T1053.005_scheduled_task.yml`](../../detections/sigma/T1053.005_scheduled_task.yml) |
+| **Táctica** | Persistence · Privilege Escalation · Execution |
+| **Técnica** | [T1053.005](https://attack.mitre.org/techniques/T1053/005/) |
+| **Plataforma** | Windows |
+| **Permisos** | Usuario (scope usuario) / Admin (scope `SYSTEM`) |
+| **Fuentes de datos** | `Scheduled Job: Scheduled Job Creation`, `Process Creation`, `File: File Creation` |
+| **Detección** | [`sigma/T1053.005_scheduled_task.yml`](../../detections/sigma/T1053.005_scheduled_task.yml) |
 
-## Why adversaries use it
+## Por qué los adversarios la usan
 
-The Windows Task Scheduler is the most common persistence mechanism after run keys. It gives an attacker:
+El Task Scheduler de Windows es el mecanismo de persistencia más común después de las run keys. Le da al atacante:
 
-- **Time-based re-entry** (`/SC ONLOGON`, `/SC HOURLY`, boot triggers)
-- **Privilege** — when created with `/RU SYSTEM` and the right token, payloads run as SYSTEM without touching services.
-- **Longevity** — tasks persist across reboots, user logoffs, and even some AV quarantines.
-- **Plausible deniability** — named like a legitimate Microsoft task, they hide in `\Microsoft\Windows\*`.
+- **Re-entrada basada en tiempo** (`/SC ONLOGON`, `/SC HOURLY`, triggers de arranque)
+- **Privilegio** — creada con `/RU SYSTEM` y el token adecuado, los payloads se ejecutan como SYSTEM sin tocar servicios.
+- **Longevidad** — las tareas persisten reinicios, logoffs e incluso algunas cuarentenas de AV.
+- **Plausible deniability** — nombradas como tareas legítimas de Microsoft, se esconden en `\Microsoft\Windows\*`.
 
-Real-world examples:
-- **TrickBot** — `schtasks /create /ru SYSTEM /sc ONLOGON /tn ...` for boot persistence.
-- **Cobalt Strike** Beacon — `schtasks` module for lateral persistence.
-- **APT29 (Cozy Bear)** — scheduled tasks disguised under the `Microsoft\Windows\` tree.
+Ejemplos del mundo real:
+- **TrickBot** — `schtasks /create /ru SYSTEM /sc ONLOGON /tn ...` para persistencia en arranque.
+- **Cobalt Strike** Beacon — módulo `schtasks` para persistencia lateral.
+- **APT29 (Cozy Bear)** — tareas programadas disfrazadas bajo el árbol `Microsoft\Windows\`.
 
-## Simulation
+## Simulación
 
-Creates a scheduled task named `PurpleLab-AtomicTest` that runs `notepad.exe` every time any user logs on. The payload is benign; the creation pattern is identical to hostile usage.
+Crea una tarea programada llamada `PurpleLab-AtomicTest` que ejecuta `notepad.exe` cada vez que cualquier usuario inicia sesión. El payload es benigno; el patrón de creación es idéntico al uso hostil.
 
 ```powershell
 pwsh ./execute.ps1
 ```
 
-To also remove the task immediately after creating it (pure telemetry run, no residual persistence):
+Para borrar la tarea inmediatamente después de crearla (ejecución pura de telemetría, sin persistencia residual):
 
 ```powershell
 pwsh ./execute.ps1 -CleanupAfter
 ```
 
-## Expected telemetry
+## Telemetría esperada
 
-| Source | Event | Key fields |
-|--------|-------|-----------|
-| Sysmon | `EventID 1` · Process Creation | `Image` = `schtasks.exe` or `svchost.exe` hosting the Scheduler; `CommandLine` with `/create` |
-| Security | `EventID 4698` · Scheduled task created | `TaskName`, `TaskContent` (XML), `SubjectUserName` |
-| Security | `EventID 4700` / `4702` | Task enabled / updated |
+| Fuente | Evento | Campos clave |
+|--------|--------|--------------|
+| Sysmon | `EventID 1` · Process Creation | `Image` = `schtasks.exe` o `svchost.exe` alojando el Scheduler; `CommandLine` con `/create` |
+| Security | `EventID 4698` · Tarea programada creada | `TaskName`, `TaskContent` (XML), `SubjectUserName` |
+| Security | `EventID 4700` / `4702` | Tarea activada / actualizada |
 | TaskScheduler | `EventID 106` (Microsoft-Windows-TaskScheduler/Operational) | `TaskName`, `UserContext` |
-| File | `FileCreate` under `C:\Windows\System32\Tasks\` | New XML file with the task definition |
+| File | `FileCreate` bajo `C:\Windows\System32\Tasks\` | Nuevo archivo XML con la definición de la tarea |
 
-Event 4698 is the most valuable — it carries the full task XML, including the triggers and the action. With that, you can fingerprint suspicious tasks (non-admin user creating boot triggers, tasks running binaries outside `%SystemRoot%`, etc.).
+El 4698 es el más valioso — lleva el XML completo de la tarea, incluyendo triggers y acciones. Con eso puedes fingerprintar tareas sospechosas (usuario no-admin creando triggers de arranque, tareas ejecutando binarios fuera de `%SystemRoot%`, etc.).
 
-## Kill-chain mapping
+## Mapeo kill-chain
 
 ```
-Execution  (T1059.*)    ──►  initial foothold
-Persistence (T1053.005) ──►  THIS ATOMIC
-Privilege Escalation    ──►  if combined with /RU SYSTEM + UAC bypass
+Execution  (T1059.*)    ──►  foothold inicial
+Persistence (T1053.005) ──►  ESTE ATOMIC
+Privilege Escalation    ──►  si se combina con /RU SYSTEM + bypass UAC
 ```
 
-## Clean-up
+## Limpieza
 
-`execute.ps1 -Cleanup` removes the task. Or manually:
+`execute.ps1 -Cleanup` elimina la tarea. O manualmente:
 
 ```powershell
 schtasks /delete /tn "PurpleLab-AtomicTest" /f
 ```
 
-The file at `C:\Windows\System32\Tasks\PurpleLab-AtomicTest` is removed together with the registration.
+El archivo en `C:\Windows\System32\Tasks\PurpleLab-AtomicTest` se elimina junto con el registro.
 
-## References
+## Referencias
 
 - [ATT&CK · T1053.005](https://attack.mitre.org/techniques/T1053/005/)
 - [Microsoft · schtasks.exe reference](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/schtasks)

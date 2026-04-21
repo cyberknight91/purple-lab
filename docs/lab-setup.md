@@ -1,63 +1,63 @@
-# Lab setup
+# Setup del lab
 
-Instructions to build a minimum-viable Windows endpoint that produces useful telemetry for this repo.
+Instrucciones para montar un endpoint Windows mínimo viable que produzca telemetría útil para este repo.
 
 ---
 
 ## Hardware
 
-Anything that can run a Windows 10/11 VM plus a small Linux SIEM VM.
+Cualquier cosa que corra una VM Windows 10/11 más una VM Linux pequeña para el SIEM.
 
 - 16 GB RAM host (8 GB guest Win + 4 GB SIEM + 4 GB host)
-- 80 GB disk
-- Hypervisor: Hyper-V, VMware Workstation, or Virtualbox. I use Hyper-V.
+- 80 GB disco
+- Hypervisor: Hyper-V, VMware Workstation o Virtualbox. Yo uso Hyper-V.
 
 ---
 
-## Isolation
+## Aislamiento
 
-**Do this first, everything else after.** Put the lab network in its own virtual switch with no route to the host LAN. Verify:
+**Esto primero, todo lo demás después.** Pon la red del lab en su propio virtual switch sin ruta a la LAN del host. Verifica:
 
 ```powershell
-# From the Windows lab VM
+# Desde la VM Windows del lab
 Test-NetConnection -ComputerName 1.1.1.1 -Port 53
-# → Should fail.
+# → Debería fallar.
 
 Test-NetConnection -ComputerName siem-lab.local -Port 514
-# → Should succeed.
+# → Debería funcionar.
 ```
 
-The SIEM VM gets a route out to download updates; the Windows target does not.
+La VM del SIEM tiene salida a internet para actualizar; el target Windows no.
 
 ---
 
-## Windows target
+## Target Windows
 
-Base image: Windows 10 22H2 Enterprise Evaluation or Windows 11 23H2 Eval. 90-day eval licences are enough for lab cycles.
+Imagen base: Windows 10 22H2 Enterprise Evaluation o Windows 11 23H2 Eval. Las licencias de eval de 90 días sobran para ciclos de lab.
 
-### 1. Install Sysmon
+### 1. Instalar Sysmon
 
 ```powershell
 Invoke-WebRequest https://download.sysinternals.com/files/Sysmon.zip -OutFile C:\temp\Sysmon.zip
 Expand-Archive C:\temp\Sysmon.zip -DestinationPath C:\temp\Sysmon
 
-# SwiftOnSecurity baseline — good default for atomics
+# Baseline SwiftOnSecurity — buen default para atomics
 Invoke-WebRequest https://raw.githubusercontent.com/SwiftOnSecurity/sysmon-config/master/sysmonconfig-export.xml `
   -OutFile C:\temp\sysmon-config.xml
 
 C:\temp\Sysmon\Sysmon64.exe -accepteula -i C:\temp\sysmon-config.xml
 ```
 
-Verify:
+Verifica:
 
 ```powershell
 Get-Service Sysmon64
 Get-WinEvent -LogName Microsoft-Windows-Sysmon/Operational -MaxEvents 5
 ```
 
-### 2. Enable advanced audit policy
+### 2. Habilitar advanced audit policy
 
-Save as `audit.csv`, apply with `auditpol /restore /file:audit.csv`:
+Guarda como `audit.csv`, aplica con `auditpol /restore /file:audit.csv`:
 
 ```csv
 Machine Name,Policy Target,Subcategory,Subcategory GUID,Inclusion Setting,Exclusion Setting,Setting Value
@@ -69,36 +69,36 @@ Machine Name,Policy Target,Subcategory,Subcategory GUID,Inclusion Setting,Exclus
 ,System,Special Logon,{0CCE921B-69AE-11D9-BED3-505054503030},Success,,1
 ```
 
-Plus, in `gpedit.msc`:
+Además, en `gpedit.msc`:
 
 - Computer Configuration → Admin Templates → System → Audit Process Creation
   - **Include command line in process creation events** = Enabled
 
 ### 3. PowerShell logging
 
-In `gpedit.msc`:
+En `gpedit.msc`:
 
 - Computer Config → Admin Templates → Windows Components → Windows PowerShell
-  - **Turn on Module Logging** = Enabled, `*` as module
+  - **Turn on Module Logging** = Enabled, `*` como módulo
   - **Turn on PowerShell Script Block Logging** = Enabled
-  - **Turn on PowerShell Transcription** = Enabled (optional, noisy)
+  - **Turn on PowerShell Transcription** = Enabled (opcional, ruidoso)
 
-Verify:
+Verifica:
 
 ```powershell
-# Fire a harmless command
+# Dispara un comando inofensivo
 Write-Host "hello"
 
-# Check 4104 lands
+# Comprueba que aterriza 4104
 Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-PowerShell/Operational'; Id=4104} -MaxEvents 3
 ```
 
-### 4. Log shipping
+### 4. Envío de logs
 
-Ship these to your SIEM:
+Envía estos al SIEM:
 
-| Log | Channel |
-|-----|---------|
+| Log | Canal |
+|-----|-------|
 | Sysmon | `Microsoft-Windows-Sysmon/Operational` |
 | Security | `Security` |
 | System | `System` |
@@ -107,7 +107,7 @@ Ship these to your SIEM:
 | TaskScheduler | `Microsoft-Windows-TaskScheduler/Operational` |
 | WMI-Activity | `Microsoft-Windows-WMI-Activity/Operational` |
 
-For Wazuh, add to `ossec.conf` on the agent:
+Para Wazuh, añade en el `ossec.conf` del agente:
 
 ```xml
 <localfile>
@@ -124,13 +124,13 @@ For Wazuh, add to `ossec.conf` on the agent:
 </localfile>
 ```
 
-For Elastic Agent / Winlogbeat, enable the equivalent channels in the policy.
+Para Elastic Agent / Winlogbeat, habilita los canales equivalentes en la policy.
 
 ---
 
 ## SIEM
 
-Use the companion repo [`siem-homelab`](https://github.com/cyberknight91/siem-homelab):
+Usa el repo compañero [`siem-homelab`](https://github.com/cyberknight91/siem-homelab):
 
 ```bash
 git clone https://github.com/cyberknight91/siem-homelab
@@ -138,34 +138,34 @@ cd siem-homelab
 docker compose up -d
 ```
 
-Ports after startup:
+Puertos tras arrancar:
 
-- Wazuh dashboard: `https://siem-lab.local:443`
+- Dashboard Wazuh: `https://siem-lab.local:443`
 - Elastic / Kibana: `https://siem-lab.local:5601`
 
 ---
 
 ## Snapshots
 
-Take a snapshot of the Windows VM **after** all the above is configured and **before** running atomics. Every atomic run ends with "roll back to snapshot".
+Haz un snapshot de la VM Windows **después** de configurar todo lo anterior y **antes** de ejecutar atomics. Cada atomic run acaba con "rollback al snapshot".
 
 ```powershell
-# From the Hyper-V host
+# Desde el host Hyper-V
 Checkpoint-VM -Name "lab-win11" -SnapshotName "baseline-sysmon-ready"
 
-# After an atomic run
+# Tras un atomic run
 Restore-VMSnapshot -VMName "lab-win11" -Name "baseline-sysmon-ready" -Confirm:$false
 ```
 
 ---
 
-## Verifying everything works
+## Verificar que todo funciona
 
-Run this on the target as a final smoke test:
+Ejecuta esto en el target como smoke test final:
 
 ```powershell
-# Should produce Sysmon 1 + Security 4688 + PowerShell 4104
+# Debería producir Sysmon 1 + Security 4688 + PowerShell 4104
 powershell.exe -NoProfile -Command "Write-Host 'lab-smoke-test'"
 ```
 
-Then query the SIEM for `lab-smoke-test` — if all three event sources land, you're ready.
+Luego busca `lab-smoke-test` en el SIEM — si las tres fuentes de eventos llegan, estás listo.

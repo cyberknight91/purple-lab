@@ -1,10 +1,10 @@
-# Expected telemetry — T1566.001 Office macro spawn
+# Telemetría esperada — T1566.001 Office macro spawn
 
-Events the SIEM should see within ~2 seconds of `execute.ps1` returning.
+Eventos que el SIEM debería ver en ~2 segundos tras el retorno de `execute.ps1`.
 
-## Sysmon · EventID 1 (Process Creation) — the child
+## Sysmon · EventID 1 (Process Creation) — el hijo
 
-Most important event: the parent→child lineage.
+Evento más importante: el lineage padre→hijo.
 
 ```xml
 <Event>
@@ -17,7 +17,7 @@ Most important event: the parent→child lineage.
     <Data Name="Image">C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe</Data>
     <Data Name="CommandLine">powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand VwByAGkAdABlAC0ASABvAHMAdAAgACcAYQB0AG8AbQBpAGMALQB0AGUAcwB0ADoAIABUADEANQA2ADYALgAwADAAMQAnAA==</Data>
     <Data Name="ParentImage">C:\Windows\System32\notepad.exe</Data>
-    <!-- OR with -ParentBinary pointing at Office: -->
+    <!-- O con -ParentBinary apuntando a Office: -->
     <!-- <Data Name="ParentImage">C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE</Data> -->
     <Data Name="User">LAB\alice</Data>
     <Data Name="IntegrityLevel">Medium</Data>
@@ -25,10 +25,10 @@ Most important event: the parent→child lineage.
 </Event>
 ```
 
-Rule that fires:
+Regla que dispara:
 `cyberknight91/detection-engineering` → `office_macro_suspicious_child.yml`.
 
-## Sysmon · EventID 1 — the parent
+## Sysmon · EventID 1 — el padre
 
 ```xml
 <Event>
@@ -40,14 +40,14 @@ Rule that fires:
 </Event>
 ```
 
-Note: in a real intrusion the parent is Word/Excel; here it's notepad. The
-detection rule pins on `ParentImage` regardless — set `-ParentBinary` if
-you need the exact-match demo.
+Nota: en una intrusión real el padre es Word/Excel; aquí es notepad. La
+regla de detección se apoya en `ParentImage` sin importar cuál — pon
+`-ParentBinary` si necesitas la demo con match exacto.
 
 ## Security · EventID 4688 (Process Creation, audit)
 
-Only present when **"Audit Process Creation"** is enabled with
-`ProcessCreationIncludeCmdLine_Enabled=1` under `HKLM\Software\
+Sólo presente cuando **"Audit Process Creation"** está habilitado con
+`ProcessCreationIncludeCmdLine_Enabled=1` en `HKLM\Software\
 Microsoft\Windows\CurrentVersion\Policies\System\Audit`.
 
 ```
@@ -61,23 +61,23 @@ Process Command Line: powershell.exe -NoProfile ... -EncodedCommand <b64>
 
 ## PowerShell · EventID 4104 (ScriptBlock)
 
-After the base64 payload is decoded by powershell.exe:
+Tras decodificar el payload base64 por powershell.exe:
 
 ```
 Creating Scriptblock text (1 of 1):
 Write-Host 'atomic-test: T1566.001 (2026-04-20T16:14:02.442Z)'
 ```
 
-## Companion validation against the filter case
+## Validación de apoyo contra el caso filtro
 
-Run `execute.ps1 -ChildMode mshta` and confirm the rule does **not**
-alert (filter_office_help triggers on the office.com URL).
+Ejecuta `execute.ps1 -ChildMode mshta` y confirma que la regla **no**
+alerta (filter_office_help dispara con la URL de office.com).
 
-## What to screenshot for the portfolio
+## Qué capturar para el portfolio
 
-1. Kibana Discover: filtered on `rule.id: 100xxx` showing the alert row.
-2. Sysmon event XML expanded for the child process.
-3. Process tree (Process Hacker / Sysinternals Process Explorer) showing
-   `notepad.exe → powershell.exe` before the parent exits.
+1. Kibana Discover: filtrado en `rule.id: 100xxx` mostrando la fila de alerta.
+2. XML del evento Sysmon expandido para el proceso hijo.
+3. Árbol de procesos (Process Hacker / Sysinternals Process Explorer) mostrando
+   `notepad.exe → powershell.exe` antes de que el padre salga.
 
-Drop the three images under `purple-lab/atomics/T1566.001_office_macro_spawn/assets/`.
+Guarda las tres imágenes bajo `purple-lab/atomics/T1566.001_office_macro_spawn/assets/`.

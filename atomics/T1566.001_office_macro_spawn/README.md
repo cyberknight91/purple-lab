@@ -1,92 +1,93 @@
-# T1566.001 — Office Macro Spawning Child Process
+# T1566.001 — Macro de Office generando proceso hijo
 
-| Field | Value |
+| Campo | Valor |
 |-------|-------|
-| **Tactic** | Initial Access → Execution |
-| **Technique** | [T1566.001](https://attack.mitre.org/techniques/T1566/001/) (Spearphishing Attachment) |
-| **Sub-technique** | [T1204.002](https://attack.mitre.org/techniques/T1204/002/) (User Execution: Malicious File) |
-| **Platform** | Windows |
-| **Permissions** | User |
-| **Data sources** | `Process: Process Creation`, `Process: Parent → Child lineage` |
-| **Detection (same repo)** | [`sigma/T1059.001_powershell_encoded.yml`](../../detections/sigma/T1059.001_powershell_encoded.yml) (catches the payload) |
-| **Detection (cross-repo)** | [`cyberknight91/detection-engineering · office_macro_suspicious_child.yml`](https://github.com/cyberknight91/detection-engineering/blob/main/rules/sigma/windows/initial_access/office_macro_suspicious_child.yml) (catches the lineage) |
+| **Táctica** | Initial Access → Execution |
+| **Técnica** | [T1566.001](https://attack.mitre.org/techniques/T1566/001/) (Spearphishing Attachment) |
+| **Sub-técnica** | [T1204.002](https://attack.mitre.org/techniques/T1204/002/) (User Execution: Malicious File) |
+| **Plataforma** | Windows |
+| **Permisos** | Usuario |
+| **Fuentes de datos** | `Process: Process Creation`, `Process: Parent → Child lineage` |
+| **Detección (mismo repo)** | [`sigma/T1059.001_powershell_encoded.yml`](../../detections/sigma/T1059.001_powershell_encoded.yml) (caza el payload) |
+| **Detección (cross-repo)** | [`cyberknight91/detection-engineering · office_macro_suspicious_child.yml`](https://github.com/cyberknight91/detection-engineering/blob/main/rules/sigma/windows/initial_access/office_macro_suspicious_child.yml) (caza el lineage) |
 
-## Why adversaries use it
+## Por qué los adversarios la usan
 
-The Office macro is the single most durable phishing initial-access
-vector in Windows security history. Emotet, Qakbot, IcedID, TrickBot,
-Dridex, Hancitor — the loader names change every 18 months but the
-primitive is the same:
+La macro de Office es el vector de initial-access por phishing más duradero
+en la historia de la seguridad Windows. Emotet, Qakbot, IcedID, TrickBot,
+Dridex, Hancitor — los nombres de los loaders cambian cada 18 meses pero
+la primitiva es la misma:
 
-1. Phishing email with a `.docm` / `.xlsm` / `.docx` attachment
-2. User opens, clicks "Enable Content"
-3. VBA macro in `Document_Open()` calls `Shell()` or uses `WScript.Shell.Run`
-4. Child process (cmd, powershell, mshta, rundll32, wscript…) downloads stage 2
+1. Email de phishing con adjunto `.docm` / `.xlsm` / `.docx`
+2. El usuario abre, hace clic en "Habilitar contenido"
+3. La macro VBA en `Document_Open()` llama a `Shell()` o usa `WScript.Shell.Run`
+4. El proceso hijo (cmd, powershell, mshta, rundll32, wscript…) descarga la stage 2
 
-Microsoft disabled internet-macro execution by default in 2022, which
-dropped the success rate materially. But many SMEs run old Office
-installs or signed-macro whitelisted setups — and the class is not
-extinct, just less common.
+Microsoft desactivó la ejecución de macros de internet por defecto en 2022,
+lo que bajó la tasa de éxito notablemente. Pero muchas PYMEs siguen con
+instalaciones viejas de Office o configuraciones con macros firmadas en
+allow-list — la clase no está extinta, solo es menos común.
 
-## Simulation
+## Simulación
 
-The atomic simulates **the parent→child lineage only** — the thing every
-detection in this class watches. It does **not** drop a real payload. The
-spawned process prints a timestamp to stdout and exits.
+El atomic simula **solo el lineage padre→hijo** — lo que vigila cualquier
+detección de esta clase. **No** suelta un payload real. El proceso hijo
+escribe un timestamp a stdout y sale.
 
-Exactly which Office product is "simulated" is controllable. By default
-we use `notepad.exe` as the parent stand-in (because it's disposable and
-present on every Windows install) but `execute.ps1` accepts a path to a
-real Office binary if you want the full ParentImage field to match in
-your SIEM.
+Qué producto de Office se "simula" es controlable. Por defecto usamos
+`notepad.exe` como sustituto del padre (porque es desechable y está en
+todas las instalaciones Windows) pero `execute.ps1` acepta una ruta a un
+binario real de Office si quieres que el campo ParentImage cuadre
+exactamente en tu SIEM.
 
 ```powershell
-# Default — uses notepad.exe as parent (safe, universal)
+# Por defecto — usa notepad.exe como padre (seguro, universal)
 pwsh ./execute.ps1
 
-# Optional — real Office binary (needs Office installed and path override)
+# Opcional — binario real de Office (requiere Office instalado y path override)
 pwsh ./execute.ps1 -ParentBinary "$env:ProgramFiles\Microsoft Office\root\Office16\WINWORD.EXE"
 ```
 
-## Expected telemetry
+## Telemetría esperada
 
-| Source | Event | Key fields |
-|--------|-------|-----------|
-| Sysmon | `EventID 1` | `ParentImage|endswith: '\winword.exe'` (or `\notepad.exe` in default mode), `Image|endswith: '\powershell.exe'`, `CommandLine contains '-EncodedCommand'` |
-| Security | `EventID 4688` | Same; requires Audit Process Creation + command-line logging |
-| PowerShell | `EventID 4104` | ScriptBlock content of the decoded payload |
+| Fuente | Evento | Campos clave |
+|--------|--------|--------------|
+| Sysmon | `EventID 1` | `ParentImage|endswith: '\winword.exe'` (o `\notepad.exe` en modo por defecto), `Image|endswith: '\powershell.exe'`, `CommandLine contains '-EncodedCommand'` |
+| Security | `EventID 4688` | Igual; requiere Audit Process Creation + command-line logging |
+| PowerShell | `EventID 4104` | ScriptBlock con el payload decodificado |
 
-## Kill-chain mapping
+## Mapeo kill-chain
 
 ```
-Initial Access (T1566.001) ──► User opens malicious .docm
-User Execution (T1204.002) ──► Clicks "Enable Content"
-Execution     (T1059.001)  ──► Macro spawns powershell.exe
+Initial Access (T1566.001) ──► El usuario abre .docm malicioso
+User Execution (T1204.002) ──► Hace clic en "Habilitar contenido"
+Execution     (T1059.001)  ──► La macro genera powershell.exe
                                 │
-                                └─► THIS ATOMIC reproduces the lineage
-Defense Evasion (T1140)    ──►  Base64 / encoded argument
-Command & Control (T1105)  ──►  (out of scope) stage-2 download
+                                └─► ESTE ATOMIC reproduce el lineage
+Defense Evasion (T1140)    ──►  Argumento base64 / encodeado
+Command & Control (T1105)  ──►  (fuera de alcance) descarga stage-2
 ```
 
-## Clean-up
+## Limpieza
 
-None required — no persistence, no files, no registry.
+Ninguna requerida — sin persistencia, sin archivos, sin registro.
 
-## Why pair this with `office_macro_suspicious_child.yml`
+## Por qué emparejarlo con `office_macro_suspicious_child.yml`
 
-The detection rule is intentionally parent-driven: it watches for Office
-executables becoming the parent of a shell/scripting host regardless of
-what the child's command line looks like. Most other public rules pin on
-PowerShell command-line heuristics — which attackers bypass by using
-`mshta` or `rundll32` instead. By baseline-ing against the lineage, the
-rule survives primitive churn.
+La regla de detección es intencionalmente parent-driven: vigila que
+ejecutables de Office sean padres de un shell/scripting host
+independientemente de cómo sea la command line del hijo. La mayoría de
+reglas públicas se apoyan en heurísticas de command-line de PowerShell —
+que los atacantes bypassean usando `mshta` o `rundll32` en su lugar. Al
+baseline-ear contra el lineage, la regla sobrevive al churn de
+primitivas.
 
-This atomic exists to **prove the rule fires against the canonical
-lineage** without needing an actual phishing lab, and to exercise the
-`filter_office_help` negative case if you swap the child from
-`powershell.exe` to `mshta.exe` with an office.com URL.
+Este atomic existe para **probar que la regla dispara contra el lineage
+canónico** sin necesitar un lab de phishing real, y para ejercitar el
+caso negativo `filter_office_help` si cambias el hijo de `powershell.exe`
+a `mshta.exe` con una URL de office.com.
 
-## References
+## Referencias
 
 - [ATT&CK · T1566.001 — Spearphishing Attachment](https://attack.mitre.org/techniques/T1566/001/)
 - [ATT&CK · T1204.002 — User Execution Malicious File](https://attack.mitre.org/techniques/T1204/002/)

@@ -1,86 +1,87 @@
 # T1003.001 — OS Credential Dumping: LSASS Memory
 
-| Field | Value |
+| Campo | Valor |
 |-------|-------|
-| **Tactic** | Credential Access |
-| **Technique** | [T1003.001](https://attack.mitre.org/techniques/T1003/001/) |
-| **Platform** | Windows |
-| **Permissions** | Admin (SeDebugPrivilege) |
-| **Data sources** | `Process: Process Access`, `Process Creation`, `File Creation` |
-| **Detection** | [`sigma/T1003.001_lsass_dump.yml`](../../detections/sigma/T1003.001_lsass_dump.yml) |
+| **Táctica** | Credential Access |
+| **Técnica** | [T1003.001](https://attack.mitre.org/techniques/T1003/001/) |
+| **Plataforma** | Windows |
+| **Permisos** | Admin (SeDebugPrivilege) |
+| **Fuentes de datos** | `Process: Process Access`, `Process Creation`, `File Creation` |
+| **Detección** | [`sigma/T1003.001_lsass_dump.yml`](../../detections/sigma/T1003.001_lsass_dump.yml) |
 
-> **Safety note.** This atomic does **NOT** dump `lsass.exe`. It reproduces the
-> exact `rundll32 + comsvcs.dll MiniDump` invocation pattern against a **disposable
-> `notepad.exe`** process spawned by the script. That pattern is the signal the
-> Sigma rule catches. A real adversary would substitute `notepad`'s PID with
-> `lsass`'s PID — everything else is identical. See § "Going the real way" below.
+> **Nota de seguridad.** Este atomic **NO** dumpea `lsass.exe`. Reproduce el
+> patrón exacto de invocación `rundll32 + comsvcs.dll MiniDump` contra un
+> proceso **`notepad.exe` desechable** lanzado por el script. Ese patrón es
+> la señal que caza la regla Sigma. Un adversario real sustituiría el PID
+> de `notepad` por el de `lsass` — todo lo demás es idéntico. Ver §
+> "Hacerlo de verdad" más abajo.
 
-## Why adversaries use it
+## Por qué los adversarios la usan
 
-`lsass.exe` holds cleartext (NTLM hashes, Kerberos tickets, cached credentials) for every interactive session on the box. Dumping its memory and exfiltrating the resulting `.dmp` lets an attacker run Mimikatz offline on attacker-controlled infrastructure and extract credentials without tripping on-host AV memory scans.
+`lsass.exe` guarda credenciales en claro (hashes NTLM, tickets Kerberos, credenciales cacheadas) de cada sesión interactiva en la máquina. Volcar su memoria y exfiltrar el `.dmp` resultante permite al atacante ejecutar Mimikatz offline en infraestructura controlada por él y extraer credenciales sin disparar escaneos de memoria del AV on-host.
 
-The `comsvcs.dll, MiniDump` export is attractive because:
+El export `comsvcs.dll, MiniDump` es atractivo porque:
 
-- **No third-party tool** on disk — `comsvcs.dll` ships with Windows.
-- **LOLBAS-compatible** — `rundll32.exe` is already allow-listed virtually everywhere.
-- **One-liner** — fits in a Cobalt Strike `shell` command.
+- **Sin herramienta de terceros** en disco — `comsvcs.dll` viene con Windows.
+- **LOLBAS-compatible** — `rundll32.exe` ya está en allow-list prácticamente en todas partes.
+- **One-liner** — cabe en un `shell` de Cobalt Strike.
 
 ```text
 rundll32.exe C:\Windows\System32\comsvcs.dll, MiniDump <PID> <out.dmp> full
 ```
 
-Real-world usage:
-- **LAPSUS$** (2022) — post-compromise credential harvesting on hijacked VDI sessions.
-- **Conti / BlackCat** — playbook step after initial domain admin.
-- **APT29** — documented in multiple intrusion reports.
+Uso en el mundo real:
+- **LAPSUS$** (2022) — cosecha de credenciales post-compromiso en sesiones VDI secuestradas.
+- **Conti / BlackCat** — paso de playbook tras initial domain admin.
+- **APT29** — documentado en varios informes de intrusión.
 
-## Simulation
+## Simulación
 
 ```powershell
 pwsh ./execute.ps1
 ```
 
-What happens:
-1. Spawn `notepad.exe` as a disposable target (captures its PID).
-2. Call `rundll32.exe C:\Windows\System32\comsvcs.dll MiniDump <PID> <tmp>\atomic.dmp full`.
-3. Wait for the dump, then delete it and close notepad.
+Lo que pasa:
+1. Lanza `notepad.exe` como target desechable (captura su PID).
+2. Llama a `rundll32.exe C:\Windows\System32\comsvcs.dll MiniDump <PID> <tmp>\atomic.dmp full`.
+3. Espera al dump, luego lo elimina y cierra notepad.
 
-The telemetry generated is functionally identical to the hostile variant **except** for the `TargetImage` (notepad, not lsass).
+La telemetría generada es funcionalmente idéntica a la variante hostil **excepto** por el `TargetImage` (notepad, no lsass).
 
-## Expected telemetry
+## Telemetría esperada
 
-| Source | Event | Key fields |
-|--------|-------|-----------|
-| Sysmon | `EventID 1` · rundll32 creation | `CommandLine` contains `comsvcs` + `MiniDump` |
-| Sysmon | `EventID 10` · ProcessAccess | `SourceImage` rundll32, `TargetImage` the victim. `GrantedAccess` 0x1FFFFF or 0x1410 (PROCESS_VM_READ + PROCESS_QUERY_INFORMATION). In the real case `TargetImage` ends with `\lsass.exe`. |
-| Sysmon | `EventID 11` · FileCreate | `.dmp` file written. |
+| Fuente | Evento | Campos clave |
+|--------|--------|--------------|
+| Sysmon | `EventID 1` · creación de rundll32 | `CommandLine` contiene `comsvcs` + `MiniDump` |
+| Sysmon | `EventID 10` · ProcessAccess | `SourceImage` rundll32, `TargetImage` la víctima. `GrantedAccess` 0x1FFFFF o 0x1410 (PROCESS_VM_READ + PROCESS_QUERY_INFORMATION). En el caso real `TargetImage` termina en `\lsass.exe`. |
+| Sysmon | `EventID 11` · FileCreate | Archivo `.dmp` escrito. |
 
-## Going the real way (lab only)
+## Hacerlo de verdad (sólo lab)
 
-On a **fully isolated admin-session** lab VM with an anti-tamper-free EDR, to dump `lsass` for real:
+En una VM de laboratorio **totalmente aislada con sesión admin** y un EDR sin anti-tamper, para dumpear `lsass` de verdad:
 
 ```powershell
-# Elevated PowerShell
+# PowerShell elevada
 $pid = (Get-Process lsass).Id
 rundll32.exe C:\Windows\System32\comsvcs.dll MiniDump $pid C:\lab\lsass.dmp full
 ```
 
-Modern Microsoft Defender will flag this with `HackTool:Win32/LsassDumper.A!MTB` within seconds — which is exactly what we want to observe from the blue side.
+Microsoft Defender moderno marcará esto con `HackTool:Win32/LsassDumper.A!MTB` en segundos — que es exactamente lo que queremos observar desde el lado azul.
 
-## Kill-chain mapping
+## Mapeo kill-chain
 
 ```
-Execution              ──►  code exec as admin
-Privilege Escalation   ──►  SeDebugPrivilege (admin default)
-Credential Access (T1003.001) ──►  THIS ATOMIC
-Lateral Movement       ──►  Pass-the-Hash / Pass-the-Ticket with the creds
+Execution              ──►  exec de código como admin
+Privilege Escalation   ──►  SeDebugPrivilege (default admin)
+Credential Access (T1003.001) ──►  ESTE ATOMIC
+Lateral Movement       ──►  Pass-the-Hash / Pass-the-Ticket con las creds
 ```
 
-## Clean-up
+## Limpieza
 
-The script deletes the `.dmp` file and kills the disposable notepad. If the dump file remains (script interrupted), remove it manually — it contains the memory of a benign notepad, but hygiene matters.
+El script elimina el archivo `.dmp` y mata el notepad desechable. Si el dump queda (script interrumpido), bórralo manualmente — contiene la memoria de un notepad benigno, pero la higiene importa.
 
-## References
+## Referencias
 
 - [ATT&CK · T1003.001](https://attack.mitre.org/techniques/T1003/001/)
 - [LOLBAS · comsvcs.dll](https://lolbas-project.github.io/lolbas/Libraries/Comsvcs/)

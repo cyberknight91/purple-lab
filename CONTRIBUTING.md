@@ -1,63 +1,63 @@
-# Contributing
+# Contribuir
 
-This repo is primarily a personal lab but PRs that follow the format are welcome.
+Este repo es principalmente un lab personal pero los PRs que sigan el formato son bienvenidos.
 
-## Adding a new atomic
+## Añadir un nuevo atomic
 
-A complete atomic is **five files**:
+Un atomic completo son **cinco archivos**:
 
 ```
 atomics/T<id>_<slug>/
-├── README.md              technique description, kill-chain, refs
-├── execute.ps1|.sh         simulation (benign payload, hostile pattern)
-├── expected_events.md      SIEM telemetry reference
+├── README.md              descripción de la técnica, kill-chain, refs
+├── execute.ps1|.sh         simulación (payload benigno, patrón hostil)
+├── expected_events.md      referencia de telemetría SIEM
 
 detections/sigma/
-└── T<id>_<slug>.yml        canonical Sigma rule
+└── T<id>_<slug>.yml        regla Sigma canónica
 
 detections/
-└── T<id>_<slug>_analysis.md  (optional) hunt queries + FP analysis
+└── T<id>_<slug>_analysis.md  (opcional) hunt queries + análisis de FP
 ```
 
-## Naming
+## Nombrado
 
-- Folder & rule file: `T<ATT&CK ID>_<snake_slug>` — e.g. `T1218.010_regsvr32_scriptlet`.
-- Sigma `id:` field: a real UUID **or** the pattern `<uuid>-purple-lab-T<id>`. Do not reuse SigmaHQ IDs.
-- Rule `title:` is present tense, describes the *behaviour*, not the tool.
+- Carpeta y archivo de regla: `T<ATT&CK ID>_<snake_slug>` — ej. `T1218.010_regsvr32_scriptlet`.
+- Campo `id:` del Sigma: UUID real **o** el patrón `<uuid>-purple-lab-T<id>`. No reutilices IDs de SigmaHQ.
+- El `title:` de la regla va en presente, describe el *comportamiento*, no la herramienta.
 
-## Sigma rule checklist
+## Checklist regla Sigma
 
-- [ ] `status:` is `experimental` until baselined; never ship directly to `stable`.
-- [ ] `tags:` include `attack.<tactic>` and `attack.t<id>`.
-- [ ] `falsepositives:` is non-empty (list real cases, not "None").
-- [ ] `level:` is justified in the rule or the analysis doc.
-- [ ] Rule validates with `sigma check`.
-- [ ] Rule converts cleanly with `sigma convert -t lucene` and `-t splunk`.
+- [ ] `status:` es `experimental` hasta hacer baseline; nunca directo a `stable`.
+- [ ] `tags:` incluyen `attack.<tactic>` y `attack.t<id>`.
+- [ ] `falsepositives:` no está vacío (lista casos reales, no "None").
+- [ ] `level:` está justificado en la regla o en el doc de análisis.
+- [ ] La regla valida con `sigma check`.
+- [ ] La regla convierte limpio con `sigma convert -t lucene` y `-t splunk`.
 
-## Atomic script checklist
+## Checklist script del atomic
 
-- [ ] First block prints technique ID + timestamp + what's about to happen.
-- [ ] Payload is benign. If that is not possible, script refuses to run without an explicit `-IAcceptRisk` flag.
-- [ ] Script is **idempotent** — two runs leave the system in the same state as one.
-- [ ] Final block prints what to look for in the SIEM.
-- [ ] Clean-up happens automatically, or the flag to do it is obvious.
+- [ ] El primer bloque imprime ID de la técnica + timestamp + qué va a pasar.
+- [ ] El payload es benigno. Si no es posible, el script se niega a correr sin un flag explícito `-IAcceptRisk`.
+- [ ] El script es **idempotente** — dos runs dejan el sistema igual que uno.
+- [ ] El último bloque imprime qué buscar en el SIEM.
+- [ ] La limpieza pasa automáticamente, o el flag para hacerla es obvio.
 
-## PR process
+## Proceso de PR
 
-1. Branch off `main` with the atomic ID: `atomic/T1218.010-regsvr32`.
-2. Commit atomically — one commit for the atomic, one for the detection, one for the docs. No mega-commits.
-3. Open PR. CI will run `sigma check` on the rules.
-4. At least one run on an isolated VM with screenshots of the SIEM firing goes in the PR description.
+1. Rama desde `main` con el ID del atomic: `atomic/T1218.010-regsvr32`.
+2. Commits atómicos — uno para el atomic, uno para la detección, uno para los docs. Sin mega-commits.
+3. Abre PR. CI correrá `sigma check` sobre las reglas.
+4. Al menos un run en VM aislada con capturas del SIEM disparando va en la descripción del PR.
 
-## Code style
+## Estilo de código
 
-- PowerShell: approved verbs, `[CmdletBinding()]`, comment-based help, `$ErrorActionPreference = "Stop"`.
-- Bash: `set -euo pipefail`, shellcheck-clean.
-- Sigma: 2-space indent, YAML 1.2.
+- PowerShell: verbos aprobados, `[CmdletBinding()]`, comment-based help, `$ErrorActionPreference = "Stop"`.
+- Bash: `set -euo pipefail`, shellcheck limpio.
+- Sigma: indent de 2 espacios, YAML 1.2.
 
-## What I will reject
+## Qué voy a rechazar
 
-- Atomics without a detection rule.
-- Detection rules without an atomic that proves they fire.
-- Payloads that exfiltrate real data, persist without opt-in cleanup, or require paid tools.
-- Copy-pasted SigmaHQ rules without substantive changes and attribution.
+- Atomics sin regla de detección.
+- Reglas de detección sin un atomic que pruebe que disparan.
+- Payloads que exfiltran datos reales, persisten sin opt-in a limpieza o requieren herramientas de pago.
+- Reglas de SigmaHQ copy-pasted sin cambios sustantivos y atribución.
