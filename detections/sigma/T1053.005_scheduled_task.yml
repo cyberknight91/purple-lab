@@ -1,0 +1,64 @@
+title: Suspicious Scheduled Task Creation via schtasks.exe
+id: 9a4c0b6d-2f7e-4b81-8f42-purple-lab-T1053005
+status: stable
+description: |
+  Detects the creation of a new scheduled task via schtasks.exe spawned from
+  an interactive shell (cmd, powershell, wscript, cscript) or an Office
+  product. The combination of parent + /create flag is one of the strongest
+  signals of user-initiated persistence tasks (as opposed to legitimate
+  deployment tooling that uses the COM API).
+author: cyberknight91
+date: 2026/04/20
+references:
+  - https://attack.mitre.org/techniques/T1053/005/
+  - https://thedfirreport.com/
+tags:
+  - attack.persistence
+  - attack.privilege_escalation
+  - attack.execution
+  - attack.t1053.005
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+    Image|endswith: '\schtasks.exe'
+  selection_flag:
+    CommandLine|contains:
+      - ' /create '
+      - ' /CREATE '
+      - '/sc '
+      - '/SC '
+  selection_parent:
+    ParentImage|endswith:
+      - '\cmd.exe'
+      - '\powershell.exe'
+      - '\pwsh.exe'
+      - '\wscript.exe'
+      - '\cscript.exe'
+      - '\mshta.exe'
+      - '\rundll32.exe'
+      - '\regsvr32.exe'
+      # Office — a scheduled task spawning from Word/Excel/Outlook is virtually
+      # always hostile (macro or follow-on payload).
+      - '\winword.exe'
+      - '\excel.exe'
+      - '\powerpnt.exe'
+      - '\outlook.exe'
+  filter_system_deployment:
+    # Legitimate deployment / MDM paths. Tune per environment.
+    ParentImage|endswith:
+      - '\CcmExec.exe'
+      - '\TrustedInstaller.exe'
+  condition: all of selection_* and not filter_system_deployment
+fields:
+  - User
+  - Image
+  - ParentImage
+  - CommandLine
+  - ProcessGuid
+falsepositives:
+  - Sysadmins scripting task creation on purpose.
+  - Legacy installers that shell out to schtasks instead of using the COM API.
+  - Some backup agents (Veeam, Acronis) scheduled via schtasks by the installer.
+level: medium

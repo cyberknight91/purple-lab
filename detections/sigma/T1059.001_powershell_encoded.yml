@@ -1,0 +1,59 @@
+title: PowerShell Encoded Command Execution
+id: 7e3f1a4c-1b9b-4a0e-9f2e-purple-lab-T1059001
+status: stable
+description: |
+  Detects invocations of powershell.exe that pass a Base64-encoded command
+  via the -EncodedCommand parameter (or its short forms -enc / -ec). This is
+  a living-off-the-land execution pattern abused by Emotet, TrickBot, LAPSUS$
+  and the majority of commodity loaders.
+author: cyberknight91
+date: 2026/04/20
+references:
+  - https://attack.mitre.org/techniques/T1059/001/
+  - https://redcanary.com/threat-detection-report/
+tags:
+  - attack.execution
+  - attack.t1059.001
+  - attack.defense_evasion
+  - attack.t1027
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_img:
+    - Image|endswith: '\powershell.exe'
+    - Image|endswith: '\pwsh.exe'
+    - OriginalFileName:
+        - 'PowerShell.EXE'
+        - 'pwsh.dll'
+  selection_flag:
+    CommandLine|contains:
+      - ' -EncodedCommand '
+      - ' -EncodedCommand='
+      - ' -encodedcommand '
+      - ' -enc '
+      - ' -enc='
+      - ' -ec '
+      - ' -ec='
+      - '/EncodedCommand '
+      - '/enc '
+  filter_legit_admin_tools:
+    # SCCM / Intune / MECM sometimes ship encoded commands. Add the known
+    # parent hashes or paths here once baselined in your environment.
+    ParentImage|endswith:
+      - '\CcmExec.exe'
+      - '\IntuneManagementExtension.exe'
+  condition: all of selection_* and not filter_legit_admin_tools
+fields:
+  - User
+  - Image
+  - ParentImage
+  - CommandLine
+  - ProcessGuid
+falsepositives:
+  - Legitimate deployment tooling (SCCM, Intune, Chocolatey) that launches
+    encoded PowerShell as a child. Baseline and add the parent to the filter.
+  - Security products themselves (some EDRs run encoded PS as part of their
+    response playbooks).
+  - Developer tooling (VS Code remote, some CI runners).
+level: high

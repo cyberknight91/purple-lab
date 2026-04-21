@@ -1,0 +1,102 @@
+title: LSASS Memory Dump via comsvcs.dll MiniDump Export
+id: 4b1e9f2a-8c3d-47b2-9e1a-purple-lab-T1003001
+status: stable
+description: |
+  Detects the well-known LOLBAS pattern where rundll32.exe is used to invoke
+  the MiniDump export of comsvcs.dll — the canonical file-less way to dump
+  process memory on Windows, most commonly against lsass.exe to harvest
+  credentials. The rule fires on any target to catch the variant where an
+  attacker picks a non-obvious PID or uses an intermediate process.
+author: cyberknight91
+date: 2026/04/20
+references:
+  - https://attack.mitre.org/techniques/T1003/001/
+  - https://lolbas-project.github.io/lolbas/Libraries/Comsvcs/
+tags:
+  - attack.credential_access
+  - attack.t1003.001
+  - attack.defense_evasion
+  - attack.t1218.011
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_rundll32:
+    Image|endswith:
+      - '\rundll32.exe'
+      - '\rundll32'
+  selection_comsvcs:
+    CommandLine|contains|all:
+      - 'comsvcs'
+      - 'MiniDump'
+  # Shorter variants where the attacker uses #24 (the ordinal of MiniDump
+  # in comsvcs.dll) instead of the function name.
+  selection_ordinal:
+    CommandLine|contains|all:
+      - 'comsvcs'
+      - '#24'
+  condition: selection_rundll32 and (selection_comsvcs or selection_ordinal)
+fields:
+  - User
+  - Image
+  - ParentImage
+  - CommandLine
+  - ProcessGuid
+falsepositives:
+  - Internal tabletop exercises / red team engagements — whitelist the
+    source host or the specific ProcessGuid for the duration of the exercise.
+  - Very rare legitimate tooling that uses comsvcs.dll MiniDump (none known
+    to the author in enterprise settings).
+level: critical
+---
+title: LSASS Process Access with Dump-Pattern GrantedAccess
+id: 4b1e9f2a-8c3d-47b2-9e1a-purple-lab-T1003001-b
+status: stable
+description: |
+  Companion rule. Detects ProcessAccess events targeting lsass.exe with the
+  access masks commonly used to dump credentials (0x1010, 0x1410, 0x1438,
+  0x1FFFFF). These masks include PROCESS_VM_READ which is required to read
+  LSASS memory for a MiniDump.
+author: cyberknight91
+date: 2026/04/20
+references:
+  - https://attack.mitre.org/techniques/T1003/001/
+  - https://www.elastic.co/security-labs/detecting-lsass-access
+tags:
+  - attack.credential_access
+  - attack.t1003.001
+logsource:
+  category: process_access
+  product: windows
+detection:
+  selection_target:
+    TargetImage|endswith: '\lsass.exe'
+  selection_mask:
+    GrantedAccess:
+      - '0x1010'
+      - '0x1038'
+      - '0x1410'
+      - '0x1438'
+      - '0x1FFFFF'
+  filter_system_sources:
+    SourceImage|endswith:
+      - '\MsMpEng.exe'        # Windows Defender
+      - '\MsSense.exe'        # Microsoft Defender for Endpoint
+      - '\SenseIR.exe'
+      - '\CSFalconService.exe' # CrowdStrike
+      - '\csagent.exe'
+      - '\SophosSystemProtectionService.exe'
+      - '\wazuh-agent.exe'
+  condition: all of selection_* and not filter_system_sources
+fields:
+  - SourceImage
+  - SourceProcessGUID
+  - TargetImage
+  - GrantedAccess
+  - CallTrace
+falsepositives:
+  - EDR / AV products that legitimately read LSASS — maintain the source
+    filter list above; add your EDR executable if it is not already there.
+  - Some vulnerability scanners (Tenable, Qualys) read process memory for
+    inspection.
+level: high

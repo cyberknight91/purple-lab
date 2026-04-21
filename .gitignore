@@ -1,0 +1,38 @@
+# Dumps and captures
+*.dmp
+*.pcap
+*.evtx
+
+# Secrets
+.env
+*.key
+*.pem
+*.pfx
+secrets/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# Python (sigma-cli)
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node (if any tooling)
+node_modules/
+
+# Logs
+*.log
+logs/
+
+# Compiled Sigma outputs (generated, not tracked)
+/detections/compiled/
